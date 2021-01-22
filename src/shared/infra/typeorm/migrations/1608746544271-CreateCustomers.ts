@@ -21,7 +21,6 @@ export default class CreateCustomers1608746544271
           {
             name: 'email',
             type: 'varchar',
-            isUnique: true,
           },
           {
             name: 'created_at',

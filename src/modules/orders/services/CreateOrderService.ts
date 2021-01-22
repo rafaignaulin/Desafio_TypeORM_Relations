@@ -4,7 +4,6 @@ import AppError from '@shared/errors/AppError';
 
 import IProductsRepository from '@modules/products/repositories/IProductsRepository';
 import ICustomersRepository from '@modules/customers/repositories/ICustomersRepository';
-import Customer from '@modules/customers/infra/typeorm/entities/Customer';
 import Order from '../infra/typeorm/entities/Order';
 import IOrdersRepository from '../repositories/IOrdersRepository';
 
@@ -23,10 +22,8 @@ class CreateOrderService {
   constructor(
     @inject('OrdersRepository')
     private ordersRepository: IOrdersRepository,
-
     @inject('ProductsRepository')
     private productsRepository: IProductsRepository,
-
     @inject('CustomersRepository')
     private customersRepository: ICustomersRepository,
   ) {}
@@ -35,29 +32,32 @@ class CreateOrderService {
     const customerExists = await this.customersRepository.findById(customer_id);
 
     if (!customerExists) {
-      throw new AppError('This customer doesnt exists.');
+      throw new AppError('Could not find any customer with the given id');
     }
 
-    const existProducts = await this.productsRepository.findAllById(products);
-
-    if (!existProducts.length) {
-      throw new AppError('Could not find any products with the given ids.');
-    }
-
-    const existProductsIds = existProducts.map(product => product.id);
-
-    const checkInexistingProducts = products.filter(
-      product => !existProductsIds.includes(product.id),
+    const existentProducts = await this.productsRepository.findAllById(
+      products,
     );
 
-    if (checkInexistingProducts.length) {
+    if (!existentProducts.length) {
+      throw new AppError('Could not find any products with the given ids');
+    }
+
+    const existentProductsIds = existentProducts.map(product => product.id);
+
+    const checkInexistentProducts = products.filter(
+      product => !existentProductsIds.includes(product.id),
+    );
+
+    if (checkInexistentProducts.length) {
       throw new AppError(
-        `Could not find product ${checkInexistingProducts[0].id}`,
+        `Could not find product ${checkInexistentProducts[0].id}`,
       );
     }
+
     const findProductsWithNoQuantityAvailable = products.filter(
       product =>
-        existProducts.filter(prod => prod.id === product.id)[0].quantity <
+        existentProducts.filter(p => p.id === product.id)[0].quantity <
         product.quantity,
     );
 
@@ -70,17 +70,20 @@ class CreateOrderService {
     const serializedProducts = products.map(product => ({
       product_id: product.id,
       quantity: product.quantity,
-      price: existProducts.filter(prod => prod.id === product.id)[0].price,
+      price: existentProducts.filter(p => p.id === product.id)[0].price,
     }));
 
     const order = await this.ordersRepository.create({
       customer: customerExists,
       products: serializedProducts,
     });
-    const orderedProductsQuantity = products.map(product => ({
-      id: product.id,
+
+    const { order_products } = order;
+
+    const orderedProductsQuantity = order_products.map(product => ({
+      id: product.product_id,
       quantity:
-        existProducts.filter(p => p.id === product.id)[0].quantity -
+        existentProducts.filter(p => p.id === product.product_id)[0].quantity -
         product.quantity,
     }));
 
@@ -89,4 +92,5 @@ class CreateOrderService {
     return order;
   }
 }
+
 export default CreateOrderService;
